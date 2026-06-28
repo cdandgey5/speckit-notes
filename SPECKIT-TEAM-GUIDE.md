@@ -369,7 +369,7 @@ Presets ([`presets/`](presets/): `lean`, `scaffold`, `self-test`) are **bundles 
 
 ## 12. The Workflow Engine (auto-chaining)
 
-This is what makes Spec Kit run **all steps automatically** without you typing each command — and is almost certainly what an internal "one-command pipeline" (e.g. an "AUDI"-style runner) is built on.
+This is what makes Spec Kit run **all steps automatically** without you typing each command — and is almost certainly what an internal "one-command pipeline" (e.g. an "ACME"-style runner) is built on.
 
 ### Definition
 
@@ -480,7 +480,7 @@ tasks.md    --(send:true)-->  implement
 
 | Signal | Mechanism |
 |---|---|
-| They typed a command in the **terminal** (`specify workflow run …` / `audi workflow run …`) | Workflow engine (or a renamed fork) |
+| They typed a command in the **terminal** (`specify workflow run …` / `acme workflow run …`) | Workflow engine (or a renamed fork) |
 | They typed **one slash command in the chat** and it cascaded | Handoffs `send: true` (or a custom umbrella command) |
 
 ---
@@ -584,8 +584,8 @@ This maps almost 1:1 onto Spec Kit:
 
 ```mermaid
 flowchart LR
-    G["audi.gather<br/>code + PO reqs<br/>→ analysis.md"] --> RA{gate:<br/>review analysis}
-    RA --> SP["audi.archspec<br/>analysis.md + architect docs<br/>→ spec.md"]
+    G["acme.gather<br/>code + PO reqs<br/>→ analysis.md"] --> RA{gate:<br/>review analysis}
+    RA --> SP["acme.archspec<br/>analysis.md + architect docs<br/>→ spec.md"]
     SP --> RS{gate:<br/>architect sign-off}
     RS --> IM["speckit.implement<br/>→ code"]
     style G fill:#1982c4,color:#fff
@@ -597,8 +597,8 @@ flowchart LR
 
 | Their step | Spec Kit equivalent | Implement as |
 |---|---|---|
-| 1. Gather | front half of `specify` | new command `audi.gather` (+ `analysis-template.md`) |
-| 2. Spec | `plan` + `tasks` | new command `audi.archspec` (+ strict `spec-template.md`) |
+| 1. Gather | front half of `specify` | new command `acme.gather` (+ `analysis-template.md`) |
+| 2. Spec | `plan` + `tasks` | new command `acme.archspec` (+ strict `spec-template.md`) |
 | 3. Implement | `implement` | reuse `speckit.implement` |
 
 ### Where "their own agents" plug in — choose the seam
@@ -624,18 +624,18 @@ Do **not** try to pass files via `{{ steps.gather.output.file }}` — pass them 
 
 ### Where the architect docs go (step 2's extra input)
 
-- Drop them in `docs/architecture/` and have `audi.archspec` read that folder (best for per-feature docs), **and/or**
+- Drop them in `docs/architecture/` and have `acme.archspec` read that folder (best for per-feature docs), **and/or**
 - put org-wide architecture rules in the **constitution**, **and/or**
 - pin output quality with a strict `spec-template.md` that has explicit sections: `## Files to change`, `## New packages`, `## Public contracts`.
 
-### Sample AUDI workflow YAML
+### Sample ACME workflow YAML
 
 ```yaml
-# workflows/audi/workflow.yml
+# workflows/acme/workflow.yml
 schema_version: "1.0"
 workflow:
-  id: audi
-  name: "AUDI SDD Cycle"
+  id: acme
+  name: "ACME SDD Cycle"
   version: "1.0.0"
 
 inputs:
@@ -644,7 +644,7 @@ inputs:
 
 steps:
   - id: gather
-    command: audi.gather
+    command: acme.gather
     integration: "{{ inputs.integration }}"
     input: { args: "{{ inputs.po_requirements }}" }
 
@@ -655,7 +655,7 @@ steps:
     on_reject: abort
 
   - id: archspec
-    command: audi.archspec
+    command: acme.archspec
     integration: "{{ inputs.integration }}"
     model: "claude-opus-4-8"
     input: { args: "{{ inputs.po_requirements }}" }
@@ -682,10 +682,10 @@ For a Case-B (external script) gather step:
 
 ### Build checklist
 
-- [ ] `audi.gather` command file + `analysis-template.md`
-- [ ] `audi.archspec` command file + strict `spec-template.md` (file/package sections) + architect-docs reference
-- [ ] Reuse `speckit.implement` (or `audi.implement` if tweaks needed)
-- [ ] `workflows/audi/workflow.yml` (above)
+- [ ] `acme.gather` command file + `analysis-template.md`
+- [ ] `acme.archspec` command file + strict `spec-template.md` (file/package sections) + architect-docs reference
+- [ ] Reuse `speckit.implement` (or `acme.implement` if tweaks needed)
+- [ ] `workflows/acme/workflow.yml` (above)
 - [ ] A `create-new-feature`-style setup script so `feature.json` is set in step 1
 
 ---
