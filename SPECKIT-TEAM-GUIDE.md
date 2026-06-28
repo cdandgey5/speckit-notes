@@ -26,7 +26,8 @@
 15. [Anatomy of a generated project](#15-anatomy-of-a-generated-project)
 16. [Customization cheat-sheet — where to change what](#16-customization-cheat-sheet--where-to-change-what)
 17. [Integrating a custom multi-step pipeline](#17-integrating-a-custom-multi-step-pipeline)
-18. [Glossary](#18-glossary)
+18. [Adding a regression / "verify" gate (brownfield safety)](#18-adding-a-regression--verify-gate-brownfield-safety)
+19. [Glossary](#19-glossary)
 
 ---
 
@@ -703,7 +704,94 @@ For a Case-B (external script) gather step:
 
 ---
 
-## 18. Glossary
+## 18. Adding a regression / "verify" gate (brownfield safety)
+
+A common need on existing codebases: **when adding a new feature, verify that existing functionality is not impacted.** Spec Kit has no single `verify` command — "verification" is spread across the `tasks` template (per-story *Independent Test*, *Checkpoint* markers, the final *Polish & Cross-Cutting Concerns* phase), the `implement` completion-validation step, and the `analyze` / `checklist` commands.
+
+To add an explicit **regression gate**, do it in *layers* (intent → generation → enforcement) rather than editing one command. This is upgrade-safe and applies automatically to every feature.
+
+```mermaid
+flowchart TD
+    A["Layer A — Constitution principle<br/>states intent: 'don't break existing'"] --> B
+    B["Layer B — tasks-template override<br/>every feature auto-gets regression tasks"] --> C
+    C["Layer C — after_implement hook<br/>runs the real test suite, blocks on failure"]
+    D["Layer D (optional) — plan-template override<br/>up-front Impact Analysis"] -.-> B
+    style A fill:#6a4c93,color:#fff
+    style B fill:#1982c4,color:#fff
+    style C fill:#e76f51,color:#fff
+```
+
+### Layer A — Constitution principle (intent; influences every phase)
+
+In `.specify/memory/constitution.md`:
+
+```markdown
+## Principle: Backward Compatibility
+Any new feature MUST NOT break existing functionality. Every change must
+identify the existing components it touches and verify them via regression
+checks before completion. Breaking changes require explicit justification.
+```
+
+Because `plan` (and downstream steps) read the constitution, this makes the whole pipeline reason about regression.
+
+### Layer B — `tasks-template.md` override (every feature auto-gets regression tasks)
+
+Create `.specify/templates/overrides/tasks-template.md` (override beats core — see §7) and add a dedicated phase:
+
+```markdown
+## Phase R: Regression & Backward-Compatibility Verification
+**Purpose**: Prove the new feature does not impact existing functionality.
+
+- [ ] TR01 Identify existing modules/APIs touched by this feature (from plan.md impact analysis)
+- [ ] TR02 [P] Run the full existing test suite; record baseline vs post-change results
+- [ ] TR03 [P] Smoke-test the user journeys of adjacent/affected features
+- [ ] TR04 Verify public contracts/APIs are unchanged (or document intentional changes)
+- [ ] TR05 Confirm no regression; if any, halt and report before marking complete
+```
+
+### Layer C — `after_implement` hook (the enforcement gate)
+
+In `.specify/extensions.yml`, make it mandatory so it cannot be skipped (see §10):
+
+```yaml
+hooks:
+  after_implement:
+    - id: regression_gate
+      enabled: true
+      optional: false        # blocks completion until run
+      extension: "regression"
+      command: "run_regression_suite"
+      description: "Run existing test suite + smoke tests; fail on regression"
+```
+
+The hook command runs your real suite (`./gradlew test`, `pytest`, `npm test`, …).
+
+### Layer D (optional) — `plan-template.md` override (impact analysis up front)
+
+Add an `## Impact Analysis` section to `.specify/templates/overrides/plan-template.md` so the *plan* lists affected existing components before any code is written — feeding `TR01` above.
+
+### In the workflow (auto-pipeline)
+
+To enforce it in the auto-run pipeline, add a step after `implement` in the workflow YAML:
+
+```yaml
+  - id: regression
+    type: shell
+    run: "./gradlew test"          # or your project's test command
+  - id: review-regression
+    type: gate
+    message: "Regression suite passed? Approve to finish."
+    options: [approve, reject]
+    on_reject: abort
+```
+
+### Recommendation
+
+Do **B + C** as the core (template gives the tasks for free on every feature; the hook enforces them), add **A** for org-wide intent, and **D** if "what does this touch?" is non-obvious in your codebase. Prefer overrides + hooks over editing `implement.md` directly — they're automatic per-feature and survive upgrades.
+
+---
+
+## 19. Glossary
 
 | Term | Meaning |
 |---|---|

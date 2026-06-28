@@ -37,6 +37,24 @@ PURPOSE: Dense factual reference about how GitHub Spec Kit (`specify` framework)
   - frontmatter `description:` → shown in command picker.
   - body uses `$ARGUMENTS` placeholder = user text after the command.
 
+## WHAT `specify init` DOES
+- Fully offline; scaffolds from assets bundled in the CLI package (version-matched, no network).
+- Steps: (1) check required tools; (2) select integration (default copilot non-interactive) + script type sh/ps; (3) install bundled templates, scripts, workflow, shared infra into `.specify/`; copy constitution-template → `.specify/memory/constitution.md` (preserves existing); (4) install the agent's command files + agent context file + optional `--preset`.
+- No AI runs during init. It only lays down files. Command CONTENT is identical across agents; only packaging/location differs:
+  - Claude: commands → `.claude/skills/speckit-<name>/SKILL.md`; context file `CLAUDE.md`.
+  - Copilot: commands → `.github/prompts/speckit.<name>.prompt.md`; context file `.github/copilot-instructions.md`; plus `.vscode/settings.json`. (`--skills` mode → `.github/skills/speckit-<name>/SKILL.md`.)
+- Flags: `--integration <agent>`, `--integration-options="--skills"`, `--here`/`.` (current dir), `--force`, `--preset <id>`, `--ignore-agent-tools`, `--integration generic --integration-options="--commands-dir <dir>"` (bring-your-own-agent).
+
+## VERIFICATION / REGRESSION GATE (brownfield: ensure new feature doesn't break existing)
+- No single `verify` command exists. Verification today = tasks-template per-story "Independent Test" + "Checkpoint" + final "Polish & Cross-Cutting Concerns" phase; implement.md completion validation; analyze (consistency); checklist (quality).
+- To add a regression gate, layer it (upgrade-safe, auto per-feature):
+  - Layer A (intent): add a "Backward Compatibility" principle to `.specify/memory/constitution.md` — new features MUST NOT break existing functionality; identify touched components; verify before completion.
+  - Layer B (generation): `.specify/templates/overrides/tasks-template.md` — add "Phase R: Regression & Backward-Compatibility Verification" with tasks: identify touched modules, run full existing test suite (baseline vs post), smoke-test adjacent features, verify public contracts unchanged, halt on regression.
+  - Layer C (enforcement): `.specify/extensions.yml` after_implement hook, optional:false (mandatory), command runs the real test suite (./gradlew test | pytest | npm test).
+  - Layer D (optional): `.specify/templates/overrides/plan-template.md` — add "Impact Analysis" section listing affected existing components up front.
+  - In auto-pipeline: add a `shell` step (run tests) + `gate` step after `implement` in the workflow YAML.
+- Recommended: B + C as core; A for intent; D for large/opaque codebases. Prefer overrides+hooks over editing implement.md (automatic + survives upgrades).
+
 ## SCRIPTS (deterministic glue)
 - Location: `scripts/bash/*.sh` and `scripts/powershell/*.ps1`. Agent picks one per OS.
 - Key scripts:
