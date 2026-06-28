@@ -27,7 +27,15 @@
 16. [Customization cheat-sheet — where to change what](#16-customization-cheat-sheet--where-to-change-what)
 17. [Integrating a custom multi-step pipeline](#17-integrating-a-custom-multi-step-pipeline)
 18. [Adding a regression / "verify" gate (brownfield safety)](#18-adding-a-regression--verify-gate-brownfield-safety)
-19. [Glossary](#19-glossary)
+19. [Making a step auto-reference a file](#19-making-a-step-auto-reference-a-file-no-manual-mention)
+20. [Upgrading without losing customizations](#20-upgrading-spec-kit-without-losing-customizations)
+21. [Distributing customizations across the team](#21-distributing-customizations-across-the-team)
+22. [Adding a brand-new custom command](#22-adding-a-brand-new-custom-command-not-just-overriding)
+23. [CLI reference & environment variables](#23-cli-reference--environment-variables)
+24. [Headless / CI execution](#24-headless--ci-execution)
+25. [Version control — what to commit](#25-version-control--what-to-commit)
+26. [Troubleshooting & reverse-engineering your team's setup](#26-troubleshooting--reverse-engineering-your-teams-setup)
+27. [Glossary](#27-glossary)
 
 ---
 
@@ -791,7 +799,141 @@ Do **B + C** as the core (template gives the tasks for free on every feature; th
 
 ---
 
-## 19. Glossary
+## 19. Making a step auto-reference a file (no manual mention)
+
+**Goal:** a step should *always* read a given document (a regression strategy, API guidelines, architect docs) without anyone mentioning it each run.
+
+The reliable approach mirrors how Spec Kit itself works: `plan` always reads the constitution because the path is **baked into the command** ([plan.md:63](templates/commands/plan.md): *"Read FEATURE_SPEC and `/memory/constitution.md`"*) — not typed each time. Do the same.
+
+| Pattern | How | When |
+|---|---|---|
+| **Single fixed file** | Bake the path into the command/template override: *"Read `.specify/memory/regression-strategy.md` and apply its checks."* | One known doc |
+| **Rules → constitution** | Put the content in `.specify/memory/constitution.md` (auto-read at plan time) | It's policy, not a long doc |
+| **Many / variable docs** | Convention + glob in the command: *"Read ALL files under `docs/regression/` as authoritative context."* For determinism, have a setup script enumerate the folder and return the list as JSON (like [setup-plan.sh](scripts/bash/setup-plan.sh)) | A folder teammates drop docs into |
+
+**Reliability ladder (weak → strong):** chat mention each run  <  path baked into command/template  <  constitution (Constitution-Check gate)  <  **a hook script that executes against the file** (deterministic). The robust combo is *baked path* (agent reads it) **+** *hook* (machine enforces it).
+
+> **Direct answer to "mention each time vs hard-code a path":** hard-code it. Bake the path/glob into the `tasks-template` override (or constitution / a `docs/` convention) — never depend on typing "use XX.md" in `$ARGUMENTS`.
+
+---
+
+## 20. Upgrading Spec Kit without losing customizations
+
+Two **separate** things upgrade independently ([docs/upgrade.md](docs/upgrade.md)):
+
+| Target | Command |
+|---|---|
+| **CLI tool** | `specify self check` (read-only) · `specify self upgrade [--dry-run] [--tag vX.Y.Z]` (auto-detects uv/pipx) |
+| **Project files** | `specify init --here --force --integration <agent>` — re-scaffolds templates/scripts/commands (⚠️ `--force` overwrites & merges) |
+
+**Why your customizations survive — if placed correctly:**
+- Core templates at `.specify/templates/<name>.md` **can be overwritten** on re-init.
+- Your **overrides** (`.specify/templates/overrides/`), **constitution** (preserved if it exists), **presets**, and **extensions** are not clobbered the same way.
+- **Rule:** never edit a core file in place. Put changes in overrides / constitution / presets / extensions. Then upgrades are safe.
+- Keep tooling upgrades in **separate commits/PRs** from feature work ([README.md](README.md) brownfield loop).
+
+---
+
+## 21. Distributing customizations across the team
+
+How to make every developer / repo inherit the same rules — least → most heavyweight:
+
+| Mechanism | Reach | Install | Best for |
+|---|---|---|---|
+| **Constitution + overrides committed to the repo** | that repo | (just git) | Simplest; per-project rules |
+| **Preset** | many repos | `specify preset add <id>` | Shared template structure |
+| **Extension** | many repos | `specify extension add <id>` | Reusable behavior + hooks (e.g. package the regression gate) |
+| **Private catalog** | org-wide | point CLI at `SPECKIT_*_CATALOG_URL` | Internal marketplace of presets/extensions/workflows |
+| **Fork of spec-kit** | org-wide | your own `specify`/`acme` build | Bake everything in (heaviest — you own merges) |
+
+> ACME is most likely **a fork** or **an internal preset/extension + a custom workflow YAML**. See §26 for how to confirm which.
+
+---
+
+## 22. Adding a brand-new custom command (not just overriding)
+
+Beyond editing existing commands, you can add entirely new ones (e.g. `acme.gather`):
+
+- **Via an extension (clean, packaged):** declare it in `extension.yml` under `provides.commands:` (name, file, description) and ship the command markdown inside the extension (see [extensions/git/extension.yml](extensions/git/extension.yml)). Installing the extension drops it into the agent's command folder.
+- **Manually:** add `templates/commands/<name>.md` (fork) **or** drop the installed file directly (`.claude/skills/speckit-<name>/SKILL.md` or `.github/prompts/<name>.prompt.md`) and re-run init/install.
+
+A command file needs: **frontmatter** (`description`, optional `scripts:`, `handoffs:`) + a **body** using `$ARGUMENTS`. Copy the structure of an existing command like [plan.md](templates/commands/plan.md). Keep the `speckit.`/`acme.` prefix so it groups with the rest.
+
+---
+
+## 23. CLI reference & environment variables
+
+Top-level command groups (run `specify --help` for the authoritative list):
+
+| Group | Examples |
+|---|---|
+| `specify init` | scaffold a project |
+| `specify self` | `check`, `upgrade` |
+| `specify workflow` | `run`, `resume`, `status`, `list`, `add`, `remove`, `search`, `info` (+ `catalog`, `step`) |
+| `specify extension` | `add`, `remove`, `list`, `search`, `info`, `enable`, `disable`, `update` |
+| `specify preset` | `add`, `remove`, `list`, `set-priority`, … |
+| `specify integration` | manage agent integrations |
+| `specify bundle` | package/share spec artifacts |
+
+Useful environment variables (verified in source):
+
+| Variable | Effect |
+|---|---|
+| `SPECIFY_FEATURE`, `SPECIFY_FEATURE_DIRECTORY` | Force the "current feature" (overrides `feature.json`); printed by `create-new-feature` |
+| `SPECIFY_INIT_DIR` | Explicit project root for non-interactive/CI |
+| `SPECKIT_COPILOT_ALLOW_ALL_TOOLS` (default on) | Run Copilot CLI with full permissions in headless dispatch (old name `SPECKIT_ALLOW_ALL_TOOLS`) |
+| `SPECKIT_INTEGRATION_<KEY>_EXECUTABLE` / `_EXTRA_ARGS` | Override an agent's binary / pass extra CLI args |
+| `SPECKIT_*_CATALOG_URL` | Point at private catalogs (extensions / presets / workflows / integrations) |
+| `SPECKIT_WORKFLOW_RUN_ID` | Current workflow run id |
+
+---
+
+## 24. Headless / CI execution
+
+- The workflow engine dispatches each command to the agent CLI as a **non-interactive subprocess** (`dispatch_command` in [base.py](src/specify_cli/integrations/base.py)) — this is what enables unattended auto-run.
+- For CI: set `SPECIFY_INIT_DIR` (root), ensure the agent CLI is installed **and authenticated**, and leave `SPECKIT_COPILOT_ALLOW_ALL_TOOLS=1` (default) so Copilot doesn't block on tool-permission prompts.
+- `gate` steps **pause for a human**. For fully unattended runs, remove the gates or pre-decide them; state persists, so a human can `specify workflow resume <run_id>` later.
+- Inspect runs with `specify workflow status`; `SPECKIT_WORKFLOW_RUN_ID` identifies a run.
+
+---
+
+## 25. Version control — what to commit
+
+**Commit (your spec-driven source of truth + shared customizations):**
+- `.specify/` — constitution, templates, **overrides**, presets, `extensions.yml`, scripts
+- the installed command files (`.claude/skills/` or `.github/prompts/`) and the context file (`CLAUDE.md` / `copilot-instructions.md`)
+- `specs/` artifacts and your `workflows/*/workflow.yml`
+
+**Consider `.gitignore`:** agent folders may hold credentials/caches — `init` itself warns to consider adding the agent folder (or parts) to `.gitignore` to avoid credential leakage. Build outputs are already gitignored per language by `implement`.
+
+**Discipline:** keep Spec Kit tooling upgrades in separate commits/PRs from feature work.
+
+---
+
+## 26. Troubleshooting & reverse-engineering your team's setup
+
+**Common pitfalls:**
+
+| Symptom | Likely cause / fix |
+|---|---|
+| "Command not found" | Project init'd for a different agent, or commands live elsewhere (Claude `.claude/skills` vs Copilot `.github/prompts`). Re-run init with the right `--integration` |
+| Wrong feature picked up | Stale `.specify/feature.json` or unset `SPECIFY_FEATURE`. Set the env var or re-run `specify` |
+| Scripts fail / wrong OS variant | Spec Kit ships both `sh` + `ps`; the command picks per OS. On Windows ensure the `.ps1` scripts are present |
+| Edits lost after upgrade | You edited a **core** file — move changes to `.specify/templates/overrides/` or the constitution (§20) |
+| Hooks not firing | `.specify/extensions.yml` invalid, `enabled: false`, or wrong phase key; a command only checks its own `before_/after_<phase>` keys |
+| Handoffs don't auto-advance | Your agent may not support handoffs (e.g. Forge strips them). Use the workflow engine instead |
+
+**To confirm what ACME changed vs stock** — diff these against a fresh `specify init`:
+- `.specify/memory/constitution.md` (rules)
+- `.specify/templates/overrides/` and any `.specify/presets/<id>/`
+- `.specify/extensions.yml` + `.specify/extensions/` (hooks/commands)
+- the installed command files (`.claude/skills/` or `.github/prompts/`) — did they edit command bodies?
+- `workflows/*/workflow.yml` — the custom pipeline (the "ACME" runner)
+- any `SPECKIT_*_CATALOG_URL` in env/CI config (private catalog)
+
+---
+
+## 27. Glossary
 
 | Term | Meaning |
 |---|---|

@@ -169,6 +169,48 @@ specs/NNN-name/             # per-feature: spec.md, plan.md, research.md,
 - Reference docs (e.g. architecture docs) injection: a docs folder read by the spec step, and/or the constitution, and/or a strict spec-template with explicit sections (Files to change / New packages / Public contracts).
 - Add review `gate` steps between phases for human sign-off (resumable).
 
+## AUTO-REFERENCE A FILE IN A STEP (no manual mention)
+- Mirror how plan always reads constitution: path is BAKED INTO the command (plan.md: "Read /memory/constitution.md"), not typed each run.
+- Patterns: (a) single fixed file → bake path into command/template override ("Read .specify/memory/regression-strategy.md"); (b) rules → constitution (auto-read at plan); (c) many/variable docs → folder convention + glob ("Read ALL files under docs/regression/"), optionally enumerated by a setup script returning JSON (like setup-plan.sh).
+- Reliability: chat mention < baked path in command/template < constitution < hook script that executes against the file (deterministic). Combine baked-path + hook.
+- Do NOT rely on typing "use XX.md" in $ARGUMENTS each run.
+
+## UPGRADING (without losing customizations)
+- CLI: `specify self check` (read-only), `specify self upgrade [--dry-run] [--tag vX.Y.Z]` (auto-detects uv/pipx).
+- Project files: `specify init --here --force --integration <agent>` (re-scaffolds; --force overwrites/merges).
+- Core templates at .specify/templates/<name>.md CAN be overwritten on re-init. Overrides (.specify/templates/overrides/), constitution (preserved if exists), presets, extensions are NOT clobbered the same way.
+- RULE: never edit core files in place; use overrides/constitution/presets/extensions → upgrade-safe. Keep tooling upgrades in separate commits/PRs.
+
+## DISTRIBUTING CUSTOMIZATIONS (team)
+- Least→most heavyweight: constitution+overrides committed to repo → preset (`specify preset add`) → extension (`specify extension add`, adds commands+hooks) → private catalog (env SPECKIT_*_CATALOG_URL) → fork of spec-kit.
+- A custom framework (e.g. ACME) is typically a fork OR internal preset/extension + custom workflow YAML.
+
+## ADDING A NEW COMMAND
+- Via extension: declare in extension.yml under provides.commands (name/file/description); ship command md; install drops it into agent command folder. (extensions/git/extension.yml example.)
+- Manually: add templates/commands/<name>.md (fork) or drop installed file (.claude/skills/<name>/SKILL.md | .github/prompts/<name>.prompt.md) and re-init.
+- Command file = frontmatter (description, optional scripts:, handoffs:) + body using $ARGUMENTS. Keep speckit./acme. prefix.
+
+## CLI GROUPS & ENV VARS
+- Groups: init; self (check/upgrade); workflow (run/resume/status/list/add/remove/search/info + catalog + step); extension (add/remove/list/search/info/enable/disable/update); preset (add/remove/list/set-priority); integration; bundle. Run `specify --help`.
+- Env vars: SPECIFY_FEATURE / SPECIFY_FEATURE_DIRECTORY (force current feature; printed by create-new-feature); SPECIFY_INIT_DIR (root for non-interactive/CI); SPECKIT_COPILOT_ALLOW_ALL_TOOLS (default on; headless Copilot perms; old: SPECKIT_ALLOW_ALL_TOOLS); SPECKIT_INTEGRATION_<KEY>_EXECUTABLE/_EXTRA_ARGS; SPECKIT_*_CATALOG_URL (private catalogs); SPECKIT_WORKFLOW_RUN_ID.
+
+## HEADLESS / CI
+- Workflow engine dispatches each command as a non-interactive subprocess (dispatch_command, integrations/base.py).
+- CI: set SPECIFY_INIT_DIR; install + authenticate the agent CLI; SPECKIT_COPILOT_ALLOW_ALL_TOOLS=1 (default) to avoid permission prompts.
+- gate steps pause for humans → for unattended runs remove gates or pre-decide; state persists → `specify workflow resume <run_id>`. Inspect via `specify workflow status`.
+
+## VERSION CONTROL
+- Commit: .specify/ (constitution, templates, overrides, presets, extensions.yml, scripts), installed command files (.claude/skills or .github/prompts), context file (CLAUDE.md/copilot-instructions.md), specs/ artifacts, workflows/*.yml.
+- Gitignore: agent folders may hold credentials/caches (init warns). Build outputs gitignored per language by implement.
+
+## TROUBLESHOOTING / REVERSE-ENGINEER A CUSTOM SETUP
+- Command not found → wrong agent init or different folder (claude .claude/skills vs copilot .github/prompts); re-init with correct --integration.
+- Wrong feature → stale .specify/feature.json or unset SPECIFY_FEATURE.
+- Edits lost after upgrade → edited core instead of override.
+- Hooks not firing → invalid extensions.yml, enabled:false, or wrong phase key.
+- Handoffs not advancing → agent doesn't support handoffs; use workflow engine.
+- To find what a custom framework changed vs stock, diff against fresh `specify init`: constitution.md; templates/overrides/ + presets/; extensions.yml + extensions/; installed command files (bodies edited?); workflows/*/workflow.yml; SPECKIT_*_CATALOG_URL in env.
+
 ## KEY FILES INDEX
 - Command logic: templates/commands/*.md
 - Output structure: templates/*-template.md
