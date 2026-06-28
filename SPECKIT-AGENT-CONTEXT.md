@@ -9,6 +9,11 @@ PURPOSE: Dense factual reference about how GitHub Spec Kit (`specify` framework)
   - Layer 2 = a generated project (created by `specify init`): contains `.specify/` + agent command files. Team customizations live here.
 - Slash commands are NOT code. They are Markdown prompt files the AI agent reads and follows. The LLM is the execution engine. Spec Kit supplies disciplined prompts + deterministic shell scripts.
 - State between steps lives on the FILESYSTEM, not in variables: per-feature folder `specs/NNN-name/` + pointer file `.specify/feature.json` + the git branch name.
+- AGNOSTIC BY DESIGN (frameworks built on it inherit this):
+  - Model-agnostic: commands are plain prompts; workflow steps can set per-step `model:`.
+  - Platform/agent-agnostic: 37 integration adapters (src/specify_cli/integrations/); selectable at init and per workflow step (`integration:`).
+  - Language-agnostic: templates carry no language assumptions; implement.md holds 44 language/tool profiles applied as needed.
+  - Greenfield AND brownfield: specify→implement builds from scratch; analyze + converge adopt SDD onto an existing codebase. `/speckit.converge` assesses current code vs spec/plan/tasks and appends only unbuilt work (no rewrite).
 
 ## SLASH COMMANDS
 - Defined in: `templates/commands/*.md` (Layer 1). One file per command.

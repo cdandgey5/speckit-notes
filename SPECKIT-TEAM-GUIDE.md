@@ -64,6 +64,19 @@ Spec Kit is a toolkit for **Spec-Driven Development (SDD)**: instead of jumping 
 - **Works with 37 AI agents** (Claude Code, GitHub Copilot, Gemini, Cursor, Codex, etc.).
 - **Core idea:** the *spec* is the source of truth; code is a downstream artifact.
 
+### Design properties (why it's "agnostic")
+
+Spec Kit (and anything built on it, like an internal ACME-style framework) is deliberately neutral across four axes — all grounded in the code:
+
+| Property | Why it holds | Evidence |
+|---|---|---|
+| **Model-agnostic** | Commands are plain Markdown prompts; the engine lets each workflow step set its own `model:` | per-step `model:` in [command/__init__.py](src/specify_cli/workflows/steps/command/__init__.py) |
+| **Platform/agent-agnostic** | 37 integration adapters; you pick one at init and can switch per step | [src/specify_cli/integrations/](src/specify_cli/integrations/) |
+| **Language-agnostic** | Templates carry no language assumptions; `implement` carries 44 language/tool profiles and applies whichever fits | [implement.md](templates/commands/implement.md) |
+| **Greenfield *and* Brownfield** | `specify`→`implement` builds from scratch; `analyze`/`converge` adopt SDD onto an existing codebase | [README.md:309-317](README.md), [converge.md](templates/commands/converge.md) |
+
+> **Brownfield specifically:** `/speckit.converge` assesses the *current* codebase against the spec/plan/tasks and appends only the unbuilt work — so the same pipeline retrofits onto legacy code without a rewrite. There are also community brownfield extensions (Brownfield Bootstrap, BrownKit, Time Machine).
+
 Recommended background reading already in the repo: [`spec-driven.md`](spec-driven.md), [`docs/concepts/sdd.md`](docs/concepts/sdd.md), [`AGENTS.md`](AGENTS.md).
 
 ---
